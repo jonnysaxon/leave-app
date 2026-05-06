@@ -3,7 +3,13 @@ import test from "node:test";
 
 import { accrualDates, applyAccruals } from "../assets/accrual.js";
 import { buildSummaryRows } from "../assets/excel.js";
-import { addTransaction, mergeDataDocuments, recomputeBalances, updateTransaction } from "../assets/storage.js";
+import {
+  addTransaction,
+  exportJson,
+  mergeDataDocuments,
+  recomputeBalances,
+  updateTransaction
+} from "../assets/storage.js";
 
 function baseData() {
   return {
@@ -123,4 +129,22 @@ test("mergeDataDocuments preserves local-only records when remote is newer", () 
     ["local-only", "remote-only"]
   );
   assert.equal(merge.data.leaveTypes[0].balance, 7);
+});
+
+
+test("exportJson preserves GitHub settings in backup JSON", () => {
+  const data = {
+    ...baseData(),
+    settings: {
+      github: {
+        repo: "jonnysaxon/leave-app-data",
+        branch: "main",
+        path: "leave.json",
+        token: "secret-token"
+      }
+    }
+  };
+
+  const exported = JSON.parse(exportJson(data));
+  assert.deepEqual(exported.settings.github, data.settings.github);
 });

@@ -23,7 +23,7 @@ import {
   upsertLeaveType
 } from "./storage.js";
 
-const APP_VERSION = "0.1.3";
+const APP_VERSION = "0.1.4";
 let data = loadData();
 let activeCalendarInput = null;
 let calendarCursor = null;
@@ -420,6 +420,15 @@ function populateGithubForm() {
   els.githubToken.value = config.token ? `••••••••${config.token.slice(-4)}` : "";
 }
 
+function refreshSettingsUiAfterDownload() {
+  populateGithubForm();
+  renderSyncButton();
+  setTimeout(() => {
+    populateGithubForm();
+    renderSyncButton();
+  }, 250);
+}
+
 function handleJsonExport() {
   const blob = new Blob([exportJson(data)], { type: "application/json" });
   const link = document.createElement("a");
@@ -429,6 +438,8 @@ function handleJsonExport() {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  refreshSettingsUiAfterDownload();
+  toast("JSON backup exported.");
 }
 
 async function handleJsonImport() {

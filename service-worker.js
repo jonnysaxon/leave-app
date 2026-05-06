@@ -1,4 +1,4 @@
-const CACHE_NAME = "leave-tracker-v0.1.3";
+const CACHE_NAME = "leave-tracker-v0.1.4";
 const APP_SHELL = [
   "./",
   "./index.html",
