@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { accrualDates, applyAccruals } from "../assets/accrual.js";
 import { buildSummaryRows } from "../assets/excel.js";
-import { addTransaction, recomputeBalances, updateTransaction } from "../assets/storage.js";
+import { addTransaction, mergeDataDocuments, recomputeBalances, updateTransaction } from "../assets/storage.js";
 
 function baseData() {
   return {
@@ -82,4 +82,45 @@ test("excel summary computes monthly net, balance, and comments", () => {
   assert.match(summary.values[1][3], /Dentist appointment/);
   assert.equal(summary.values[2][1], "");
   assert.equal(summary.values[2][2], 2.5);
+});
+
+test("mergeDataDocuments preserves local-only records when remote is newer", () => {
+  const local = {
+    ...baseData(),
+    updatedAt: "2026-05-01T00:00:00.000Z",
+    transactions: [
+      {
+        id: "local-only",
+        leaveTypeId: "annual",
+        date: "2026-05-01",
+        delta: -1,
+        note: "Local entry",
+        kind: "manual",
+        createdAt: "2026-05-01T00:00:00.000Z"
+      }
+    ]
+  };
+  const remote = {
+    ...baseData(),
+    updatedAt: "2026-05-02T00:00:00.000Z",
+    transactions: [
+      {
+        id: "remote-only",
+        leaveTypeId: "annual",
+        date: "2026-05-02",
+        delta: -2,
+        note: "Remote entry",
+        kind: "manual",
+        createdAt: "2026-05-02T00:00:00.000Z"
+      }
+    ]
+  };
+
+  const merge = mergeDataDocuments(local, remote);
+  assert.equal(merge.changed, true);
+  assert.deepEqual(
+    merge.data.transactions.map((transaction) => transaction.id).sort(),
+    ["local-only", "remote-only"]
+  );
+  assert.equal(merge.data.leaveTypes[0].balance, 7);
 });

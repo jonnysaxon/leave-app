@@ -5,11 +5,13 @@ import {
   activeLeaveTypes,
   addTransaction,
   archiveLeaveType,
+  createDataBackup,
   deleteTransaction,
   exportJson,
   findLeaveType,
   formatAmount,
   importJson,
+  listDataBackups,
   loadData,
   newestFirst,
   recomputeBalances,
@@ -21,7 +23,7 @@ import {
   upsertLeaveType
 } from "./storage.js";
 
-const APP_VERSION = "0.1.2";
+const APP_VERSION = "0.1.3";
 let data = loadData();
 let activeCalendarInput = null;
 let calendarCursor = null;
@@ -66,6 +68,7 @@ function bindElements() {
     "exportJsonButton",
     "importJsonButton",
     "importJsonInput",
+    "restoreBackupButton",
     "versionLabel",
     "checkUpdateButton",
     "forceRefreshButton",
@@ -113,6 +116,7 @@ function bindEvents() {
   els.exportJsonButton.addEventListener("click", handleJsonExport);
   els.importJsonButton.addEventListener("click", () => els.importJsonInput.click());
   els.importJsonInput.addEventListener("change", handleJsonImport);
+  els.restoreBackupButton.addEventListener("click", handleRestoreBackup);
   els.syncButton.addEventListener("click", handleSync);
   els.excelButton.addEventListener("click", openExcelDialog);
   els.excelForm.addEventListener("submit", handleExcelSubmit);
@@ -431,6 +435,7 @@ async function handleJsonImport() {
   const [file] = els.importJsonInput.files;
   if (!file) return;
   try {
+    createDataBackup(data, "Before JSON import");
     data = replaceData(importJson(await file.text()));
     persist();
     populateGithubForm();
@@ -445,6 +450,7 @@ async function handleJsonImport() {
 async function handleSync() {
   try {
     els.syncButton.disabled = true;
+    createDataBackup(data, "Before GitHub sync");
     const result = await syncData(data);
     data = replaceData(result.data);
     const accrualResult = applyAccruals(data);
@@ -457,6 +463,20 @@ async function handleSync() {
   } finally {
     renderSyncButton();
   }
+}
+
+function handleRestoreBackup() {
+  if (!confirm("Restore the latest local backup? Current data will be backed up first.")) return;
+  const [latest] = listDataBackups();
+  if (!latest || !latest.data) {
+    toast("No local backup found.");
+    return;
+  }
+  createDataBackup(data, "Before backup restore");
+  data = replaceData(latest.data);
+  populateGithubForm();
+  render();
+  toast("Latest backup restored.");
 }
 
 function openExcelDialog() {

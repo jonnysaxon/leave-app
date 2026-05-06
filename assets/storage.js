@@ -1,4 +1,6 @@
 const STORAGE_KEY = "leave-tracker:data";
+const BACKUP_KEY = "leave-tracker:backups";
+const MAX_BACKUPS = 10;
 
 export function createDefaultData() {
   return {
@@ -30,6 +32,33 @@ export function loadData() {
 
 export function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeData(data)));
+}
+
+export function createDataBackup(data, reason = "Manual backup") {
+  const backup = {
+    id: crypto.randomUUID(),
+    reason,
+    createdAt: new Date().toISOString(),
+    data: normalizeData(data)
+  };
+  const backups = [backup, ...listDataBackups()].slice(0, MAX_BACKUPS);
+  localStorage.setItem(BACKUP_KEY, JSON.stringify(backups));
+  return backup;
+}
+
+export function listDataBackups() {
+  try {
+    const backups = JSON.parse(localStorage.getItem(BACKUP_KEY) || "[]");
+    return Array.isArray(backups) ? backups : [];
+  } catch {
+    return [];
+  }
+}
+
+export function restoreLatestBackup() {
+  const [latest] = listDataBackups();
+  if (!latest || !latest.data) return null;
+  return replaceData(latest.data);
 }
 
 export function normalizeData(data) {
@@ -175,6 +204,32 @@ export function replaceData(data) {
   return normalized;
 }
 
+export function mergeDataDocuments(localData, remoteData) {
+  const local = normalizeData(localData);
+  const remote = normalizeData(remoteData);
+  const leaveTypeIds = new Set(remote.leaveTypes.map((type) => type.id));
+  const transactionIds = new Set(remote.transactions.map((transaction) => transaction.id));
+
+  const localOnlyLeaveTypes = local.leaveTypes.filter((type) => !leaveTypeIds.has(type.id));
+  const localOnlyTransactions = local.transactions.filter((transaction) => !transactionIds.has(transaction.id));
+  const hasLocalOnlyData = localOnlyLeaveTypes.length > 0 || localOnlyTransactions.length > 0;
+
+  const merged = recomputeBalances({
+    ...remote,
+    leaveTypes: [...remote.leaveTypes, ...localOnlyLeaveTypes],
+    transactions: [...remote.transactions, ...localOnlyTransactions],
+    settings: mergeSettings(local.settings, remote.settings),
+    updatedAt: hasLocalOnlyData ? new Date().toISOString() : remote.updatedAt
+  });
+
+  return {
+    data: merged,
+    addedLeaveTypes: localOnlyLeaveTypes.length,
+    addedTransactions: localOnlyTransactions.length,
+    changed: hasLocalOnlyData
+  };
+}
+
 export function exportJson(data) {
   return JSON.stringify(normalizeData(data), null, 2);
 }
@@ -205,4 +260,18 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function mergeSettings(localSettings = {}, remoteSettings = {}) {
+  return {
+    ...remoteSettings,
+    github: {
+      ...((remoteSettings && remoteSettings.github) || {}),
+      ...((localSettings && localSettings.github) || {}),
+      token:
+        (localSettings.github && localSettings.github.token) ||
+        (remoteSettings.github && remoteSettings.github.token) ||
+        ""
+    }
+  };
 }

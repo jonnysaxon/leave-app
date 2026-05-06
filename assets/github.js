@@ -1,3 +1,5 @@
+import { mergeDataDocuments, normalizeData } from "./storage.js";
+
 const API_ROOT = "https://api.github.com";
 
 export async function verifyPrivateRepo(config) {
@@ -18,17 +20,34 @@ export async function syncData(localData) {
     return { data: localData, message: "Remote file created." };
   }
 
-  const remoteData = JSON.parse(remote.content);
+  const remoteData = normalizeData(JSON.parse(remote.content));
   const localTime = Date.parse(localData.updatedAt || "");
   const remoteTime = Date.parse(remoteData.updatedAt || "");
 
   if (remoteTime > localTime) {
+    const merge = mergeDataDocuments(localData, remoteData);
+    if (merge.changed) {
+      await putRemoteFile(config, merge.data, remote.sha);
+      return {
+        data: merge.data,
+        message: `Pulled remote and preserved ${merge.addedTransactions} local transaction(s).`
+      };
+    }
     return { data: remoteData, message: "Pulled newer remote data." };
   }
 
   if (localTime > remoteTime) {
     await putRemoteFile(config, localData, remote.sha);
     return { data: localData, message: "Pushed local changes." };
+  }
+
+  const merge = mergeDataDocuments(localData, remoteData);
+  if (merge.changed) {
+    await putRemoteFile(config, merge.data, remote.sha);
+    return {
+      data: merge.data,
+      message: `Merged and preserved ${merge.addedTransactions} local transaction(s).`
+    };
   }
 
   return { data: localData, message: "Already up to date." };
